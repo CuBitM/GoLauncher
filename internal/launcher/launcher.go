@@ -1,6 +1,7 @@
 package launcher
 
 import (
+	"archive/zip"
 	"fmt"
 	"io"
 	"mclauncher/internal/assets"
@@ -97,6 +98,11 @@ func Launch(cfg *Config, onProgress func(assets.Progress)) (*LaunchResult, error
 		return nil, fmt.Errorf("download: %w", err)
 	}
 
+	status("Rozbaluji natives...")
+	if err := extractNatives(cfg, meta, nativesDir); err != nil {
+		status("Varování: natives extraction: " + err.Error())
+	}
+
 	status("Spouštím Minecraft...")
 	classpath := buildClasspath(cfg, meta)
 	jvmArgs := buildJVMArgs(cfg, classpath, nativesDir, meta)
@@ -130,6 +136,70 @@ func ensureClient(cfg *Config, d *assets.Downloader) error {
 	return d.DownloadAll([]assets.DownloadTask{task}, nil)
 }
 
+func extractNatives(cfg *Config, meta *versions.VersionMeta, nativesDir string) error {
+	libDir := filepath.Join(cfg.GameDir, "libraries")
+	osName := currentOSName()
+
+	for _, lib := range meta.Libraries {
+		if !rulesAllow(lib.Rules) {
+			continue
+		}
+		nativeKey, ok := lib.Natives[osName]
+		if !ok {
+			continue
+		}
+		// Replace arch placeholder
+		nativeKey = strings.ReplaceAll(nativeKey, "${arch}", "64")
+		classifier, ok := lib.Downloads.Classifiers[nativeKey]
+		if !ok {
+			continue
+		}
+		jarPath := filepath.Join(libDir, classifier.Path)
+		extractJarNatives(jarPath, nativesDir)
+	}
+	return nil
+}
+
+func extractJarNatives(jarPath, destDir string) {
+	r, err := zip.OpenReader(jarPath)
+	if err != nil {
+		return
+	}
+	defer r.Close()
+
+	for _, f := range r.File {
+		name := f.Name
+		if strings.HasSuffix(name, "/") {
+			continue
+		}
+		if strings.Contains(name, "META-INF") {
+			continue
+		}
+		base := filepath.Base(name)
+		if !strings.HasSuffix(base, ".dll") &&
+			!strings.HasSuffix(base, ".so") &&
+			!strings.HasSuffix(base, ".dylib") {
+			continue
+		}
+		destPath := filepath.Join(destDir, base)
+		if _, err := os.Stat(destPath); err == nil {
+			continue // already exists
+		}
+		rc, err := f.Open()
+		if err != nil {
+			continue
+		}
+		out, err := os.Create(destPath)
+		if err != nil {
+			rc.Close()
+			continue
+		}
+		io.Copy(out, rc)
+		out.Close()
+		rc.Close()
+	}
+}
+
 func buildLibraryTasks(cfg *Config, meta *versions.VersionMeta) ([]assets.DownloadTask, string, error) {
 	libDir := filepath.Join(cfg.GameDir, "libraries")
 	nativesDir := filepath.Join(cfg.GameDir, "versions", meta.ID, "natives")
@@ -154,7 +224,9 @@ func buildLibraryTasks(cfg *Config, meta *versions.VersionMeta) ([]assets.Downlo
 				Name: lib.Name,
 			})
 		}
-		if nativeKey, ok := lib.Natives[osName]; ok {
+		nativeKey, ok := lib.Natives[osName]
+		if ok {
+			nativeKey = strings.ReplaceAll(nativeKey, "${arch}", "64")
 			if classifier, ok := lib.Downloads.Classifiers[nativeKey]; ok {
 				tasks = append(tasks, assets.DownloadTask{
 					URL:  classifier.URL,
