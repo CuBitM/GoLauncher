@@ -215,6 +215,7 @@ func buildJVMArgs(cfg *Config, classpath, nativesDir string, meta *versions.Vers
 		"-Dminecraft.api.account.host=https://nope.invalid",
 		"-Dminecraft.api.session.host=https://nope.invalid",
 		"-Dminecraft.api.services.host=https://nope.invalid",
+		"-Dminecraft.api.profiles.host=https://nope.invalid",
 		fmt.Sprintf("-Djava.library.path=%s", nativesDir),
 		"-cp", classpath,
 	}
