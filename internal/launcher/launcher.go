@@ -242,7 +242,7 @@ func buildGameArgs(cfg *Config, meta *versions.VersionMeta) []string {
 		"${assets_index_name}": meta.AssetIndex.ID,
 		"${auth_uuid}":         cfg.UUID,
 		"${auth_access_token}": cfg.AccessToken,
-		"${user_type}":         "mojang",
+		"${user_type}":         "legacy",
 		"${version_type}":      string(meta.Type),
 		"${resolution_width}":  "854",
 		"${resolution_height}": "480",
