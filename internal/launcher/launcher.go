@@ -210,6 +210,11 @@ func buildJVMArgs(cfg *Config, classpath, nativesDir string, meta *versions.Vers
 		"-XX:+AlwaysPreTouch",
 		"-XX:+PerfDisableSharedMem",
 		"-Dfile.encoding=UTF-8",
+		"-Djava.net.preferIPv4Stack=true",
+		"-Dminecraft.api.auth.host=https://nope.invalid",
+		"-Dminecraft.api.account.host=https://nope.invalid",
+		"-Dminecraft.api.session.host=https://nope.invalid",
+		"-Dminecraft.api.services.host=https://nope.invalid",
 		fmt.Sprintf("-Djava.library.path=%s", nativesDir),
 		"-cp", classpath,
 	}
@@ -236,10 +241,12 @@ func buildGameArgs(cfg *Config, meta *versions.VersionMeta) []string {
 		"${assets_index_name}": meta.AssetIndex.ID,
 		"${auth_uuid}":         cfg.UUID,
 		"${auth_access_token}": cfg.AccessToken,
-		"${user_type}":         "legacy",
+		"${user_type}":         "mojang",
 		"${version_type}":      string(meta.Type),
 		"${resolution_width}":  "854",
 		"${resolution_height}": "480",
+		"${clientid}":          "",
+		"${auth_xuid}":         "",
 	}
 
 	var args []string
