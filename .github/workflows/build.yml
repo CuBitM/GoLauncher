@@ -21,23 +21,21 @@ jobs:
         with:
           go-version: '1.21'
 
-      - name: Install GCC (MSYS2)
+      - name: Install GCC via MSYS2
         uses: msys2/setup-msys2@v2
         with:
           msystem: MINGW64
-          update: true
+          update: false
           install: mingw-w64-x86_64-gcc mingw-w64-x86_64-pkg-config
 
-      - name: Build
-        shell: msys2 {0}
+      - name: Build EXE
         env:
           CGO_ENABLED: "1"
-          GOPATH: "C:/hostedtoolcache/windows/go/1.21/x64"
-          PATH: "C:/hostedtoolcache/windows/go/1.21/x64/bin:/mingw64/bin:$PATH"
         run: |
-          cd "$GITHUB_WORKSPACE"
+          $env:PATH = "C:\msys64\mingw64\bin;" + $env:PATH
           go mod tidy
           go build -ldflags="-s -w -H windowsgui" -o GoLauncher.exe ./cmd/
+        shell: pwsh
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -45,7 +43,7 @@ jobs:
           name: GoLauncher-Windows
           path: GoLauncher.exe
 
-      - name: Create Release (on tag)
+      - name: Create Release
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
@@ -53,16 +51,11 @@ jobs:
           name: "GoLauncher ${{ github.ref_name }}"
           body: |
             ## GoLauncher ${{ github.ref_name }}
-
-            ### Stažení / Download
-            Stáhni **GoLauncher.exe** a spusť — žádná instalace není potřeba!
             Download **GoLauncher.exe** and run — no installation needed!
-
-            ### Co je nového / What's new
-            - Auto-download Javy (Java 8/17/21 podle verze MC)
-            - Offline mód — hraj bez Microsoft účtu
-            - Fullscreen podpora
+            - Auto-download Java (8/17/21)
+            - Offline mode
+            - Fullscreen support
             - RAM slider
-            - Fabric mod loader podpora
+            - Fabric mod loader
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
