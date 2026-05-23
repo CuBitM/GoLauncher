@@ -20,11 +20,11 @@ const (
 )
 
 type DownloadTask struct {
-	URL      string
-	Path     string
-	SHA1     string
-	Size     int
-	Name     string
+	URL  string
+	Path string
+	SHA1 string
+	Size int
+	Name string
 }
 
 type Progress struct {
@@ -47,9 +47,9 @@ func NewDownloader(gameDir string) *Downloader {
 		client: &http.Client{
 			Timeout: 60 * time.Second,
 			Transport: &http.Transport{
-				MaxIdleConns:        100,
-				MaxConnsPerHost:     32,
-				IdleConnTimeout:     90 * time.Second,
+				MaxIdleConns:    100,
+				MaxConnsPerHost: 32,
+				IdleConnTimeout: 90 * time.Second,
 			},
 		},
 		progress: &Progress{},
@@ -57,10 +57,15 @@ func NewDownloader(gameDir string) *Downloader {
 }
 
 func (d *Downloader) GetProgress() Progress {
+	d.mu.Lock()
+	current := d.progress.Current
+	d.mu.Unlock()
+
 	return Progress{
 		Total:     atomic.LoadInt64(&d.progress.Total),
 		Completed: atomic.LoadInt64(&d.progress.Completed),
 		Failed:    atomic.LoadInt64(&d.progress.Failed),
+		Current:   current,
 	}
 }
 
@@ -69,17 +74,36 @@ func (d *Downloader) DownloadAll(tasks []DownloadTask, onProgress func(Progress)
 	atomic.StoreInt64(&d.progress.Completed, 0)
 	atomic.StoreInt64(&d.progress.Failed, 0)
 
+	d.mu.Lock()
+	d.progress.Current = ""
+	d.mu.Unlock()
+
+	if len(tasks) == 0 {
+		if onProgress != nil {
+			onProgress(d.GetProgress())
+		}
+		return nil
+	}
+
 	sem := make(chan struct{}, MaxConcurrent)
 	var wg sync.WaitGroup
 	errChan := make(chan error, len(tasks))
 
 	for _, task := range tasks {
 		task := task
+
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
+
 			sem <- struct{}{}
-			defer func() { <-sem }()
+			defer func() {
+				<-sem
+			}()
+
+			d.mu.Lock()
+			d.progress.Current = task.Name
+			d.mu.Unlock()
 
 			if err := d.downloadFile(task); err != nil {
 				atomic.AddInt64(&d.progress.Failed, 1)
@@ -103,12 +127,21 @@ func (d *Downloader) DownloadAll(tasks []DownloadTask, onProgress func(Progress)
 	}
 
 	if len(errs) > 0 {
-		return fmt.Errorf("%d downloads failed", len(errs))
+		return fmt.Errorf("%d downloads failed, first error: %w", len(errs), errs[0])
 	}
+
 	return nil
 }
 
 func (d *Downloader) downloadFile(task DownloadTask) error {
+	if task.URL == "" {
+		return fmt.Errorf("empty URL for %s", task.Name)
+	}
+
+	if task.Path == "" {
+		return fmt.Errorf("empty path for %s", task.Name)
+	}
+
 	if d.fileExists(task.Path, task.SHA1) {
 		return nil
 	}
@@ -123,35 +156,47 @@ func (d *Downloader) downloadFile(task DownloadTask) error {
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != 200 {
+	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("HTTP %d for %s", resp.StatusCode, task.URL)
 	}
 
 	tmpPath := task.Path + ".tmp"
+
 	f, err := os.Create(tmpPath)
 	if err != nil {
 		return err
 	}
 
 	hasher := sha1.New()
-	w := io.MultiWriter(f, hasher)
+	writer := io.MultiWriter(f, hasher)
 
-	if _, err := io.Copy(w, resp.Body); err != nil {
-		f.Close()
-		os.Remove(tmpPath)
-		return err
+	_, copyErr := io.Copy(writer, resp.Body)
+	closeErr := f.Close()
+
+	if copyErr != nil {
+		_ = os.Remove(tmpPath)
+		return copyErr
 	}
-	f.Close()
+
+	if closeErr != nil {
+		_ = os.Remove(tmpPath)
+		return closeErr
+	}
 
 	if task.SHA1 != "" {
 		got := fmt.Sprintf("%x", hasher.Sum(nil))
 		if got != task.SHA1 {
-			os.Remove(tmpPath)
+			_ = os.Remove(tmpPath)
 			return fmt.Errorf("SHA1 mismatch for %s: got %s, want %s", task.Name, got, task.SHA1)
 		}
 	}
 
-	return os.Rename(tmpPath, task.Path)
+	if err := os.Rename(tmpPath, task.Path); err != nil {
+		_ = os.Remove(tmpPath)
+		return err
+	}
+
+	return nil
 }
 
 func (d *Downloader) fileExists(path, sha1hash string) bool {
@@ -159,11 +204,14 @@ func (d *Downloader) fileExists(path, sha1hash string) bool {
 	if err != nil {
 		return false
 	}
+
 	if sha1hash == "" {
 		return true
 	}
+
 	h := sha1.New()
-	h.Write(data)
+	_, _ = h.Write(data)
+
 	return fmt.Sprintf("%x", h.Sum(nil)) == sha1hash
 }
 
@@ -190,6 +238,7 @@ func (d *Downloader) BuildAssetTasks(indexURL, indexSHA1, indexID string) ([]Dow
 		SHA1: indexSHA1,
 		Name: "asset index",
 	}
+
 	if err := d.downloadFile(indexTask); err != nil {
 		return nil, fmt.Errorf("failed to download asset index: %w", err)
 	}
@@ -208,14 +257,24 @@ func (d *Downloader) BuildAssetTasks(indexURL, indexSHA1, indexID string) ([]Dow
 	var tasks []DownloadTask
 
 	for _, obj := range objects.Objects {
+		if len(obj.Hash) < 2 {
+			continue
+		}
+
 		prefix := obj.Hash[:2]
 		objPath := filepath.Join(objectsDir, prefix, obj.Hash)
+
+		name := obj.Hash
+		if len(name) > 8 {
+			name = name[:8]
+		}
+
 		tasks = append(tasks, DownloadTask{
 			URL:  fmt.Sprintf("%s/%s/%s", AssetsBaseURL, prefix, obj.Hash),
 			Path: objPath,
 			SHA1: obj.Hash,
 			Size: obj.Size,
-			Name: obj.Hash[:8],
+			Name: name,
 		})
 	}
 

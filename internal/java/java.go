@@ -240,7 +240,6 @@ func findJavaExe(root, name string) string {
 func findCandidates(major int) []string {
 	var candidates []string
 
-	// Nejdřív zkontroluj naši vlastní staženou Javu
 	home, _ := os.UserHomeDir()
 	localJava := filepath.Join(home, ".golauncher", "java", fmt.Sprintf("java%d", major))
 	if runtime.GOOS == "windows" {
@@ -288,7 +287,6 @@ func findCandidates(major int) []string {
 		}
 	}
 
-	// Filtruj prázdné
 	var clean []string
 	for _, c := range candidates {
 		if c != "" {
