@@ -2,8 +2,10 @@ package gui
 
 import (
 	"fmt"
+	"image/color"
 	"mclauncher/configs"
 	"mclauncher/internal/assets"
+	"mclauncher/internal/auth"
 	"mclauncher/internal/launcher"
 	"mclauncher/internal/modloader"
 	"mclauncher/internal/versions"
@@ -23,6 +25,68 @@ import (
 	"fyne.io/fyne/v2/widget"
 )
 
+type blueTheme struct{}
+
+func (blueTheme) Color(name fyne.ThemeColorName, variant fyne.ThemeVariant) color.Color {
+	switch name {
+	case theme.ColorNameBackground:
+		return color.NRGBA{R: 8, G: 12, B: 24, A: 255}
+	case theme.ColorNameForeground:
+		return color.NRGBA{R: 232, G: 240, B: 255, A: 255}
+	case theme.ColorNameButton:
+		return color.NRGBA{R: 18, G: 28, B: 52, A: 255}
+	case theme.ColorNameDisabledButton:
+		return color.NRGBA{R: 20, G: 24, B: 36, A: 255}
+	case theme.ColorNameInputBackground:
+		return color.NRGBA{R: 12, G: 18, B: 34, A: 255}
+	case theme.ColorNamePlaceHolder:
+		return color.NRGBA{R: 115, G: 130, B: 160, A: 255}
+	case theme.ColorNamePrimary:
+		return color.NRGBA{R: 52, G: 144, B: 255, A: 255}
+	case theme.ColorNameHover:
+		return color.NRGBA{R: 38, G: 90, B: 170, A: 120}
+	case theme.ColorNamePressed:
+		return color.NRGBA{R: 35, G: 120, B: 230, A: 180}
+	case theme.ColorNameFocus:
+		return color.NRGBA{R: 64, G: 156, B: 255, A: 255}
+	case theme.ColorNameSelection:
+		return color.NRGBA{R: 38, G: 112, B: 220, A: 180}
+	case theme.ColorNameSeparator:
+		return color.NRGBA{R: 35, G: 48, B: 78, A: 255}
+	case theme.ColorNameShadow:
+		return color.NRGBA{R: 0, G: 0, B: 0, A: 120}
+	case theme.ColorNameOverlayBackground:
+		return color.NRGBA{R: 10, G: 14, B: 26, A: 245}
+	default:
+		return theme.DarkTheme().Color(name, variant)
+	}
+}
+
+func (blueTheme) Font(style fyne.TextStyle) fyne.Resource {
+	return theme.DarkTheme().Font(style)
+}
+
+func (blueTheme) Icon(name fyne.ThemeIconName) fyne.Resource {
+	return theme.DarkTheme().Icon(name)
+}
+
+func (blueTheme) Size(name fyne.ThemeSizeName) float32 {
+	switch name {
+	case theme.SizeNamePadding:
+		return 10
+	case theme.SizeNameInnerPadding:
+		return 8
+	case theme.SizeNameText:
+		return 14
+	case theme.SizeNameHeadingText:
+		return 24
+	case theme.SizeNameSubHeadingText:
+		return 18
+	default:
+		return theme.DarkTheme().Size(name)
+	}
+}
+
 type App struct {
 	fyneApp     fyne.App
 	win         fyne.Window
@@ -39,6 +103,7 @@ type App struct {
 	accountLabel  *widget.Label
 	ramSlider     *widget.Slider
 	ramLabel      *widget.Label
+	loginBtn      *widget.Button
 }
 
 func NewApp() *App {
@@ -53,12 +118,11 @@ func NewApp() *App {
 
 func (a *App) Run() {
 	a.fyneApp = app.New()
-	a.fyneApp.Settings().SetTheme(theme.DarkTheme())
+	a.fyneApp.Settings().SetTheme(blueTheme{})
 
 	a.win = a.fyneApp.NewWindow("GoLauncher")
-	a.win.Resize(fyne.NewSize(1080, 680))
+	a.win.Resize(fyne.NewSize(1120, 700))
 	a.win.CenterOnScreen()
-
 	a.win.SetContent(a.buildUI())
 
 	go a.loadVersions()
@@ -83,13 +147,13 @@ func (a *App) buildUI() fyne.CanvasObject {
 
 func (a *App) buildHeader() fyne.CanvasObject {
 	title := widget.NewLabelWithStyle("GoLauncher", fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
-	subtitle := widget.NewLabel("Clean Minecraft launcher")
+	subtitle := widget.NewLabel("Fast, clean and blue Minecraft launcher")
 
 	a.accountLabel = widget.NewLabel("")
 	a.updateAccountLabel()
 
 	usernameEntry := widget.NewEntry()
-	usernameEntry.SetPlaceHolder("Username")
+	usernameEntry.SetPlaceHolder("Offline username")
 	usernameEntry.SetText(a.cfg.OfflineUsername)
 
 	offlineBtn := widget.NewButton("Offline", func() {
@@ -108,20 +172,22 @@ func (a *App) buildHeader() fyne.CanvasObject {
 		a.updateAccountLabel()
 		a.setStatus("Offline mód: " + name)
 	})
+	offlineBtn.Importance = widget.MediumImportance
 
-	loginBtn := widget.NewButton("MS Login", a.onMSLogin)
+	a.loginBtn = widget.NewButton("MS Login", a.onMSLogin)
+	a.loginBtn.Importance = widget.HighImportance
 
 	left := container.NewVBox(title, subtitle)
 
 	right := container.NewHBox(
 		usernameEntry,
 		offlineBtn,
-		loginBtn,
+		a.loginBtn,
 		widget.NewSeparator(),
 		a.accountLabel,
 	)
 
-	return widget.NewCard("", "", container.NewBorder(nil, nil, left, right))
+	return container.NewPadded(widget.NewCard("", "", container.NewBorder(nil, nil, left, right)))
 }
 
 func (a *App) buildLaunchTab() fyne.CanvasObject {
@@ -130,7 +196,7 @@ func (a *App) buildLaunchTab() fyne.CanvasObject {
 		configs.Save(a.cfg)
 	})
 
-	versionCard := widget.NewCard("Minecraft Version", "Vyber verzi, kterou chceš spustit.", container.NewVBox(
+	versionCard := widget.NewCard("Minecraft Version", "Vyber verzi hry.", container.NewVBox(
 		a.versionSelect,
 	))
 
@@ -167,7 +233,7 @@ func (a *App) buildLaunchTab() fyne.CanvasObject {
 	})
 	oldCheck.SetChecked(a.cfg.ShowOld)
 
-	optionsCard := widget.NewCard("Options", "", container.NewVBox(
+	optionsCard := widget.NewCard("Options", "Filtry verzí.", container.NewVBox(
 		snapshotCheck,
 		oldCheck,
 	))
@@ -186,7 +252,13 @@ func (a *App) buildLaunchTab() fyne.CanvasObject {
 		ramCard,
 	)
 
+	heroTitle := widget.NewLabelWithStyle("Ready to play", fyne.TextAlignCenter, fyne.TextStyle{Bold: true})
+	heroSubtitle := widget.NewLabelWithStyle("Vyber verzi, nastav RAM a spusť Minecraft.", fyne.TextAlignCenter, fyne.TextStyle{})
+
 	bottomCard := widget.NewCard("", "", container.NewVBox(
+		heroTitle,
+		heroSubtitle,
+		widget.NewSeparator(),
 		a.statusLabel,
 		a.progressBar,
 		a.launchBtn,
@@ -229,6 +301,7 @@ func (a *App) buildSettingsTab() fyne.CanvasObject {
 
 		dialog.ShowInformation("Saved", "Nastavení uloženo.", a.win)
 	})
+	saveBtn.Importance = widget.HighImportance
 
 	openDirBtn := widget.NewButton("Open game directory", func() {
 		openFolder(a.cfg.GameDir)
@@ -346,7 +419,7 @@ func (a *App) buildModLoadersTab() fyne.CanvasObject {
 					statusLabel.SetText(msg)
 				})
 			case modloader.Forge:
-				statusLabel.SetText("Forge: použij oficiální Forge installer JAR.")
+				statusLabel.SetText("Forge auto install připravíme v dalším kroku.")
 				return
 			case modloader.Quilt:
 				statusLabel.SetText("Quilt zatím není implementovaný.")
@@ -371,7 +444,7 @@ func (a *App) buildModLoadersTab() fyne.CanvasObject {
 		}
 	})
 
-	card := widget.NewCard("Mod Loaders", "Instalace Fabric / Forge loaderů.", container.NewVBox(
+	card := widget.NewCard("Mod Loaders", "Instalace mod loaderů.", container.NewVBox(
 		widget.NewLabel("Loader type"),
 		typeSelect,
 		widget.NewLabel("Loader version"),
@@ -446,7 +519,43 @@ func (a *App) refreshVersionList() {
 }
 
 func (a *App) onMSLogin() {
-	dialog.ShowInformation("MS Login", "Microsoft login zatím není implementovaný.\nPoužij Offline mód.", a.win)
+	a.setStatus("Přihlašuji přes Microsoft...")
+
+	if a.loginBtn != nil {
+		a.loginBtn.Disable()
+	}
+
+	go func() {
+		defer func() {
+			if a.loginBtn != nil {
+				a.loginBtn.Enable()
+			}
+		}()
+
+		account, err := auth.LoginMicrosoftLoopback()
+		if err != nil {
+			a.setStatus("MS Login selhal: " + err.Error())
+			return
+		}
+
+		a.cfg.Account = &configs.AccountConfig{
+			Username:     account.Username,
+			UUID:         account.UUID,
+			AccessToken:  account.AccessToken,
+			RefreshToken: account.RefreshToken,
+		}
+
+		a.cfg.OfflineMode = false
+		a.cfg.OfflineUsername = account.Username
+
+		if err := configs.Save(a.cfg); err != nil {
+			a.setStatus("Nepodařilo se uložit účet: " + err.Error())
+			return
+		}
+
+		a.updateAccountLabel()
+		a.setStatus("Přihlášeno jako " + account.Username)
+	}()
 }
 
 func (a *App) onLaunch() {
