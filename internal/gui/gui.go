@@ -30,33 +30,33 @@ type blueTheme struct{}
 func (blueTheme) Color(name fyne.ThemeColorName, variant fyne.ThemeVariant) color.Color {
 	switch name {
 	case theme.ColorNameBackground:
-		return color.NRGBA{R: 8, G: 12, B: 24, A: 255}
+		return color.NRGBA{R: 6, G: 15, B: 28, A: 255}
 	case theme.ColorNameForeground:
-		return color.NRGBA{R: 232, G: 240, B: 255, A: 255}
+		return color.NRGBA{R: 235, G: 244, B: 255, A: 255}
 	case theme.ColorNameButton:
-		return color.NRGBA{R: 18, G: 28, B: 52, A: 255}
+		return color.NRGBA{R: 0, G: 70, B: 135, A: 255}
 	case theme.ColorNameDisabledButton:
-		return color.NRGBA{R: 20, G: 24, B: 36, A: 255}
+		return color.NRGBA{R: 18, G: 28, B: 45, A: 255}
 	case theme.ColorNameInputBackground:
-		return color.NRGBA{R: 12, G: 18, B: 34, A: 255}
+		return color.NRGBA{R: 8, G: 20, B: 38, A: 255}
 	case theme.ColorNamePlaceHolder:
-		return color.NRGBA{R: 115, G: 130, B: 160, A: 255}
+		return color.NRGBA{R: 130, G: 165, B: 210, A: 255}
 	case theme.ColorNamePrimary:
-		return color.NRGBA{R: 52, G: 144, B: 255, A: 255}
+		return color.NRGBA{R: 30, G: 144, B: 255, A: 255}
 	case theme.ColorNameHover:
-		return color.NRGBA{R: 38, G: 90, B: 170, A: 120}
+		return color.NRGBA{R: 30, G: 144, B: 255, A: 110}
 	case theme.ColorNamePressed:
-		return color.NRGBA{R: 35, G: 120, B: 230, A: 180}
+		return color.NRGBA{R: 0, G: 70, B: 135, A: 230}
 	case theme.ColorNameFocus:
-		return color.NRGBA{R: 64, G: 156, B: 255, A: 255}
+		return color.NRGBA{R: 30, G: 144, B: 255, A: 255}
 	case theme.ColorNameSelection:
-		return color.NRGBA{R: 38, G: 112, B: 220, A: 180}
+		return color.NRGBA{R: 30, G: 144, B: 255, A: 180}
 	case theme.ColorNameSeparator:
-		return color.NRGBA{R: 35, G: 48, B: 78, A: 255}
+		return color.NRGBA{R: 0, G: 70, B: 135, A: 255}
 	case theme.ColorNameShadow:
-		return color.NRGBA{R: 0, G: 0, B: 0, A: 120}
+		return color.NRGBA{R: 0, G: 0, B: 0, A: 160}
 	case theme.ColorNameOverlayBackground:
-		return color.NRGBA{R: 10, G: 14, B: 26, A: 245}
+		return color.NRGBA{R: 5, G: 12, B: 25, A: 245}
 	default:
 		return theme.DarkTheme().Color(name, variant)
 	}
@@ -95,6 +95,7 @@ type App struct {
 	manifest    *versions.VersionManifest
 	modInst     *modloader.Installer
 
+	contentBox    *fyne.Container
 	versionSelect *widget.Select
 	statusLabel   *widget.Label
 	progressBar   *widget.ProgressBar
@@ -121,42 +122,43 @@ func (a *App) Run() {
 	a.fyneApp.Settings().SetTheme(blueTheme{})
 
 	a.win = a.fyneApp.NewWindow("GoLauncher")
-	a.win.Resize(fyne.NewSize(1120, 700))
+	a.win.Resize(fyne.NewSize(1180, 720))
 	a.win.CenterOnScreen()
-	a.win.SetContent(a.buildUI())
 
-	go a.loadVersions()
+	if a.cfg.Account != nil && !a.cfg.OfflineMode {
+		a.win.SetContent(a.buildMainUI())
+		go a.loadVersions()
+	} else {
+		a.win.SetContent(a.buildLoginGate())
+	}
 
 	a.win.ShowAndRun()
 }
 
-func (a *App) buildUI() fyne.CanvasObject {
-	header := a.buildHeader()
+func (a *App) buildLoginGate() fyne.CanvasObject {
+	title := widget.NewLabelWithStyle("GoLauncher", fyne.TextAlignCenter, fyne.TextStyle{Bold: true})
+	subtitle := widget.NewLabelWithStyle("Minimal blue Minecraft launcher", fyne.TextAlignCenter, fyne.TextStyle{})
 
-	tabs := container.NewAppTabs(
-		container.NewTabItem("Launch", a.buildLaunchTab()),
-		container.NewTabItem("Settings", a.buildSettingsTab()),
-		container.NewTabItem("Mod Loaders", a.buildModLoadersTab()),
-		container.NewTabItem("Console", a.buildConsoleTab()),
-	)
+	loginMicrosoftBtn := widget.NewButton("Login to Microsoft", func() {
+		a.loginFromGate()
+	})
+	loginMicrosoftBtn.Importance = widget.HighImportance
 
-	tabs.SetTabLocation(container.TabLocationTop)
+	loginElyBtn := widget.NewButton("Login to ely.by", func() {
+		dialog.ShowInformation("ely.by", "ely.by login zatím není implementovaný.", a.win)
+	})
 
-	return container.NewBorder(header, nil, nil, nil, tabs)
-}
+	loginLittleSkinBtn := widget.NewButton("Login to LittleSkin", func() {
+		dialog.ShowInformation("LittleSkin", "LittleSkin login zatím není implementovaný.", a.win)
+	})
 
-func (a *App) buildHeader() fyne.CanvasObject {
-	title := widget.NewLabelWithStyle("GoLauncher", fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
-	subtitle := widget.NewLabel("Fast, clean and blue Minecraft launcher")
-
-	a.accountLabel = widget.NewLabel("")
-	a.updateAccountLabel()
+	orLabel := widget.NewLabelWithStyle("OR", fyne.TextAlignCenter, fyne.TextStyle{Bold: true})
 
 	usernameEntry := widget.NewEntry()
-	usernameEntry.SetPlaceHolder("Offline username")
+	usernameEntry.SetPlaceHolder("Enter username...")
 	usernameEntry.SetText(a.cfg.OfflineUsername)
 
-	offlineBtn := widget.NewButton("Offline", func() {
+	continueBtn := widget.NewButton("Continue", func() {
 		name := strings.TrimSpace(usernameEntry.Text)
 		if name == "" {
 			dialog.ShowError(fmt.Errorf("zadej hráčské jméno"), a.win)
@@ -166,39 +168,175 @@ func (a *App) buildHeader() fyne.CanvasObject {
 		a.cfg.OfflineUsername = name
 		a.cfg.OfflineMode = true
 		a.cfg.Account = nil
-
 		configs.Save(a.cfg)
 
-		a.updateAccountLabel()
-		a.setStatus("Offline mód: " + name)
+		a.win.SetContent(a.buildMainUI())
+		go a.loadVersions()
 	})
-	offlineBtn.Importance = widget.MediumImportance
+	continueBtn.Importance = widget.HighImportance
 
-	a.loginBtn = widget.NewButton("MS Login", a.onMSLogin)
-	a.loginBtn.Importance = widget.HighImportance
-
-	left := container.NewVBox(title, subtitle)
-
-	right := container.NewHBox(
-		usernameEntry,
-		offlineBtn,
-		a.loginBtn,
+	centerBox := container.NewVBox(
+		title,
+		subtitle,
 		widget.NewSeparator(),
-		a.accountLabel,
+		loginMicrosoftBtn,
+		loginElyBtn,
+		loginLittleSkinBtn,
+		orLabel,
+		usernameEntry,
+		continueBtn,
 	)
 
-	return container.NewPadded(widget.NewCard("", "", container.NewBorder(nil, nil, left, right)))
+	card := widget.NewCard("", "", centerBox)
+	cardContainer := container.NewCenter(container.NewPadded(card))
+
+	return container.NewBorder(nil, nil, nil, nil, cardContainer)
 }
 
-func (a *App) buildLaunchTab() fyne.CanvasObject {
+func (a *App) loginFromGate() {
+	if a.loginBtn != nil {
+		a.loginBtn.Disable()
+	}
+
+	account, err := auth.LoginMicrosoftLoopback()
+	if err != nil {
+		dialog.ShowError(fmt.Errorf("MS Login selhal: %w", err), a.win)
+		if a.loginBtn != nil {
+			a.loginBtn.Enable()
+		}
+		return
+	}
+
+	a.cfg.Account = &configs.AccountConfig{
+		Username:     account.Username,
+		UUID:         account.UUID,
+		AccessToken:  account.AccessToken,
+		RefreshToken: account.RefreshToken,
+	}
+	a.cfg.OfflineMode = false
+	a.cfg.OfflineUsername = account.Username
+	configs.Save(a.cfg)
+
+	a.win.SetContent(a.buildMainUI())
+	go a.loadVersions()
+}
+
+func (a *App) buildMainUI() fyne.CanvasObject {
+	a.contentBox = container.NewMax()
+	a.setPage(a.buildPlayPage())
+
+	header := a.buildTopBar()
+	sidebar := a.buildSidebar()
+
+	body := container.NewBorder(nil, nil, sidebar, nil, container.NewPadded(a.contentBox))
+
+	return container.NewBorder(header, nil, nil, nil, body)
+}
+
+func (a *App) buildTopBar() fyne.CanvasObject {
+	playBtn := widget.NewButton("Play", func() {
+		a.setPage(a.buildPlayPage())
+	})
+	playBtn.Importance = widget.HighImportance
+
+	editBtn := widget.NewButton("Edit", func() {
+		a.setPage(a.buildEditPage())
+	})
+
+	logsBtn := widget.NewButton("Logs", func() {
+		a.setPage(a.buildConsolePage())
+	})
+
+	settingsBtn := widget.NewButtonWithIcon("", theme.SettingsIcon(), func() {
+		a.setPage(a.buildSettingsPage())
+	})
+
+	title := widget.NewLabelWithStyle("GoLauncher", fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
+
+	bar := container.NewBorder(nil, nil, title, nil, container.NewHBox(
+		settingsBtn,
+		playBtn,
+		editBtn,
+		logsBtn,
+	))
+
+	return container.NewPadded(widget.NewCard("", "", bar))
+}
+
+func (a *App) buildSidebar() fyne.CanvasObject {
+	newBtn := a.navButton("+ New", func() {
+		dialog.ShowInformation("New Instance", "Instance UI připravíme v dalším kroku.", a.win)
+	})
+	newBtn.Importance = widget.HighImportance
+
+	openGameDirBtn := a.navButton("Open Game Dir", func() {
+		openFolder(a.cfg.GameDir)
+	})
+
+	openModsBtn := a.navButton("Open Mods", func() {
+		modsDir := filepath.Join(a.cfg.GameDir, "mods")
+		if err := os.MkdirAll(modsDir, 0755); err == nil {
+			openFolder(modsDir)
+		}
+	})
+
+	openLogsBtn := a.navButton("Open Logs", func() {
+		openFolder(filepath.Join(a.cfg.GameDir, "logs"))
+	})
+
+	accountTitle := widget.NewLabel("Accounts:")
+	a.accountLabel = widget.NewLabel("")
+	a.updateAccountLabel()
+
+	logoutBtn := widget.NewButton("Logout", func() {
+		a.cfg.Account = nil
+		a.cfg.OfflineMode = true
+		configs.Save(a.cfg)
+		a.win.SetContent(a.buildLoginGate())
+	})
+
+	box := container.NewVBox(
+		newBtn,
+		widget.NewSeparator(),
+		openGameDirBtn,
+		openModsBtn,
+		openLogsBtn,
+		layout.NewSpacer(),
+		widget.NewSeparator(),
+		accountTitle,
+		a.accountLabel,
+		logoutBtn,
+	)
+
+	card := widget.NewCard("", "", box)
+
+	return container.NewPadded(container.NewGridWrap(fyne.NewSize(240, 620), card))
+}
+
+func (a *App) navButton(text string, tapped func()) *widget.Button {
+	btn := widget.NewButton(text, tapped)
+	btn.Alignment = widget.ButtonAlignLeading
+	return btn
+}
+
+func (a *App) setPage(obj fyne.CanvasObject) {
+	if a.contentBox == nil {
+		return
+	}
+
+	a.contentBox.Objects = []fyne.CanvasObject{obj}
+	a.contentBox.Refresh()
+}
+
+func (a *App) buildPlayPage() fyne.CanvasObject {
 	a.versionSelect = widget.NewSelect([]string{"Načítám verze..."}, func(v string) {
 		a.cfg.SelectedVersion = v
 		configs.Save(a.cfg)
 	})
 
-	versionCard := widget.NewCard("Minecraft Version", "Vyber verzi hry.", container.NewVBox(
-		a.versionSelect,
-	))
+	if a.manifest != nil {
+		a.refreshVersionList()
+	}
 
 	if a.cfg.AllocMax <= 0 {
 		a.cfg.AllocMax = 2048
@@ -214,125 +352,73 @@ func (a *App) buildLaunchTab() fyne.CanvasObject {
 		configs.Save(a.cfg)
 	}
 
-	ramCard := widget.NewCard("Memory", "Doporučeno pro 1.16.5: 2048–4096 MB.", container.NewVBox(
-		a.ramLabel,
-		a.ramSlider,
-	))
-
-	snapshotCheck := widget.NewCheck("Show snapshots", func(v bool) {
+	snapshotCheck := widget.NewCheck("Snapshots", func(v bool) {
 		a.cfg.ShowSnapshots = v
 		a.refreshVersionList()
 		configs.Save(a.cfg)
 	})
 	snapshotCheck.SetChecked(a.cfg.ShowSnapshots)
 
-	oldCheck := widget.NewCheck("Show old versions", func(v bool) {
+	oldCheck := widget.NewCheck("Old versions", func(v bool) {
 		a.cfg.ShowOld = v
 		a.refreshVersionList()
 		configs.Save(a.cfg)
 	})
 	oldCheck.SetChecked(a.cfg.ShowOld)
 
-	optionsCard := widget.NewCard("Options", "Filtry verzí.", container.NewVBox(
-		snapshotCheck,
-		oldCheck,
-	))
-
 	a.progressBar = widget.NewProgressBar()
 	a.progressBar.Hide()
 
-	a.statusLabel = widget.NewLabel("Připraven")
+	a.statusLabel = widget.NewLabel("Ready")
 	a.statusLabel.Alignment = fyne.TextAlignCenter
 
 	a.launchBtn = widget.NewButton("Launch Minecraft", a.onLaunch)
 	a.launchBtn.Importance = widget.HighImportance
 
-	mainGrid := container.NewGridWithColumns(2,
-		versionCard,
-		ramCard,
-	)
+	versionCard := widget.NewCard("Version", "Choose Minecraft version.", container.NewVBox(
+		a.versionSelect,
+	))
 
-	heroTitle := widget.NewLabelWithStyle("Ready to play", fyne.TextAlignCenter, fyne.TextStyle{Bold: true})
-	heroSubtitle := widget.NewLabelWithStyle("Vyber verzi, nastav RAM a spusť Minecraft.", fyne.TextAlignCenter, fyne.TextStyle{})
+	memoryCard := widget.NewCard("Memory", "Recommended: 2048–4096 MB.", container.NewVBox(
+		a.ramLabel,
+		a.ramSlider,
+	))
 
-	bottomCard := widget.NewCard("", "", container.NewVBox(
-		heroTitle,
-		heroSubtitle,
+	filterCard := widget.NewCard("Filters", "", container.NewVBox(
+		snapshotCheck,
+		oldCheck,
+	))
+
+	playCard := widget.NewCard("", "", container.NewVBox(
+		widget.NewLabelWithStyle("Ready to play", fyne.TextAlignCenter, fyne.TextStyle{Bold: true}),
+		widget.NewLabelWithStyle("Select version and launch Minecraft.", fyne.TextAlignCenter, fyne.TextStyle{}),
 		widget.NewSeparator(),
 		a.statusLabel,
 		a.progressBar,
 		a.launchBtn,
 	))
 
-	return container.NewPadded(container.NewVBox(
-		mainGrid,
-		optionsCard,
+	grid := container.NewGridWithColumns(2, versionCard, memoryCard)
+
+	return container.NewVBox(
+		grid,
+		filterCard,
 		layout.NewSpacer(),
-		bottomCard,
-	))
-}
-
-func (a *App) buildSettingsTab() fyne.CanvasObject {
-	gameDirEntry := widget.NewEntry()
-	gameDirEntry.SetText(a.cfg.GameDir)
-
-	jvmEntry := widget.NewEntry()
-	jvmEntry.SetPlaceHolder("Auto-detect")
-	jvmEntry.SetText(a.cfg.CustomJVM)
-
-	extraJVMEntry := widget.NewEntry()
-	extraJVMEntry.SetPlaceHolder("-XX:+UseG1GC")
-	extraJVMEntry.SetText(strings.Join(a.cfg.ExtraJVMArgs, " "))
-
-	saveBtn := widget.NewButton("Save settings", func() {
-		a.cfg.GameDir = strings.TrimSpace(gameDirEntry.Text)
-		a.cfg.CustomJVM = strings.TrimSpace(jvmEntry.Text)
-
-		if strings.TrimSpace(extraJVMEntry.Text) != "" {
-			a.cfg.ExtraJVMArgs = strings.Fields(extraJVMEntry.Text)
-		} else {
-			a.cfg.ExtraJVMArgs = nil
-		}
-
-		configs.Save(a.cfg)
-
-		a.versionsMgr = versions.NewManager(a.cfg.GameDir)
-		a.modInst = modloader.NewInstaller(a.cfg.GameDir)
-
-		dialog.ShowInformation("Saved", "Nastavení uloženo.", a.win)
-	})
-	saveBtn.Importance = widget.HighImportance
-
-	openDirBtn := widget.NewButton("Open game directory", func() {
-		openFolder(a.cfg.GameDir)
-	})
-
-	openLogsBtn := widget.NewButton("Open logs", func() {
-		openFolder(filepath.Join(a.cfg.GameDir, "logs"))
-	})
-
-	form := widget.NewForm(
-		widget.NewFormItem("Game directory", gameDirEntry),
-		widget.NewFormItem("Java path", jvmEntry),
-		widget.NewFormItem("Extra JVM args", extraJVMEntry),
+		playCard,
 	)
-
-	settingsCard := widget.NewCard("Settings", "Základní nastavení launcheru.", container.NewVBox(
-		form,
-		container.NewHBox(saveBtn, openDirBtn, openLogsBtn),
-	))
-
-	return container.NewPadded(settingsCard)
 }
 
-func (a *App) buildModLoadersTab() fyne.CanvasObject {
-	statusLabel := widget.NewLabel("Vyber Minecraft verzi v Launch tabu.")
+func (a *App) buildEditPage() fyne.CanvasObject {
+	typeSelect := widget.NewSelect([]string{"None", "Fabric", "Forge", "Quilt"}, func(string) {})
+	typeSelect.SetSelected("None")
+
 	loaderVersionSelect := widget.NewSelect([]string{}, func(string) {})
 	loaderVersionSelect.Disable()
 
-	var selectedType modloader.Type = modloader.None
+	statusLabel := widget.NewLabel("Select loader type to manage mod loader.")
+	selectedType := modloader.None
 
-	typeSelect := widget.NewSelect([]string{"None", "Fabric", "Forge", "Quilt"}, func(v string) {
+	typeSelect.OnChanged = func(v string) {
 		switch v {
 		case "Fabric":
 			selectedType = modloader.Fabric
@@ -345,17 +431,17 @@ func (a *App) buildModLoadersTab() fyne.CanvasObject {
 			loaderVersionSelect.Options = nil
 			loaderVersionSelect.ClearSelected()
 			loaderVersionSelect.Disable()
-			statusLabel.SetText("Mod loader vypnutý.")
+			statusLabel.SetText("Mod loader disabled.")
 			return
 		}
 
 		mcVersion := extractVersionID(a.cfg.SelectedVersion)
 		if mcVersion == "" {
-			statusLabel.SetText("Vyber MC verzi v Launch tabu.")
+			statusLabel.SetText("Select Minecraft version in Play page.")
 			return
 		}
 
-		statusLabel.SetText("Načítám loader verze...")
+		statusLabel.SetText("Loading loader versions...")
 		loaderVersionSelect.Disable()
 
 		go func() {
@@ -387,7 +473,7 @@ func (a *App) buildModLoadersTab() fyne.CanvasObject {
 			loaderVersionSelect.Enable()
 			statusLabel.SetText(fmt.Sprintf("Nalezeno %d verzí.", len(loaders)))
 		}()
-	})
+	}
 
 	var installBtn *widget.Button
 
@@ -437,45 +523,119 @@ func (a *App) buildModLoadersTab() fyne.CanvasObject {
 	})
 	installBtn.Importance = widget.HighImportance
 
-	openModsBtn := widget.NewButton("Open mods folder", func() {
+	addFileBtn := widget.NewButton("Add File", func() {
+		dialog.ShowInformation("Add File", "Přidání mod souboru připravíme v dalším kroku.", a.win)
+	})
+
+	downloadContentBtn := widget.NewButton("Download Content", func() {
+		dialog.ShowInformation("Mod Store", "Modrinth / CurseForge mod store připravíme v dalším kroku.", a.win)
+	})
+
+	openModsBtn := widget.NewButton("Open Mods Folder", func() {
 		modsDir := filepath.Join(a.cfg.GameDir, "mods")
 		if err := os.MkdirAll(modsDir, 0755); err == nil {
 			openFolder(modsDir)
 		}
 	})
 
-	card := widget.NewCard("Mod Loaders", "Instalace mod loaderů.", container.NewVBox(
+	actions := container.NewVBox(
+		downloadContentBtn,
+		addFileBtn,
+		openModsBtn,
+	)
+
+	loaderCard := widget.NewCard("Mod Loader", "Install and manage loaders.", container.NewVBox(
 		widget.NewLabel("Loader type"),
 		typeSelect,
 		widget.NewLabel("Loader version"),
 		loaderVersionSelect,
 		statusLabel,
-		container.NewHBox(installBtn, openModsBtn),
+		installBtn,
 	))
 
-	return container.NewPadded(card)
+	modStoreCard := widget.NewCard("Built-in mod store", "Planned minimalist mod browser.", container.NewVBox(
+		widget.NewLabel("Install mods, resource packs, shaders and modpacks from one place."),
+		actions,
+	))
+
+	return container.NewGridWithColumns(2, loaderCard, modStoreCard)
 }
 
-func (a *App) buildConsoleTab() fyne.CanvasObject {
+func (a *App) buildSettingsPage() fyne.CanvasObject {
+	gameDirEntry := widget.NewEntry()
+	gameDirEntry.SetText(a.cfg.GameDir)
+
+	jvmEntry := widget.NewEntry()
+	jvmEntry.SetPlaceHolder("Auto-detect")
+	jvmEntry.SetText(a.cfg.CustomJVM)
+
+	extraJVMEntry := widget.NewEntry()
+	extraJVMEntry.SetPlaceHolder("-XX:+UseG1GC")
+	extraJVMEntry.SetText(strings.Join(a.cfg.ExtraJVMArgs, " "))
+
+	saveBtn := widget.NewButton("Save Settings", func() {
+		a.cfg.GameDir = strings.TrimSpace(gameDirEntry.Text)
+		a.cfg.CustomJVM = strings.TrimSpace(jvmEntry.Text)
+
+		if strings.TrimSpace(extraJVMEntry.Text) != "" {
+			a.cfg.ExtraJVMArgs = strings.Fields(extraJVMEntry.Text)
+		} else {
+			a.cfg.ExtraJVMArgs = nil
+		}
+
+		configs.Save(a.cfg)
+
+		a.versionsMgr = versions.NewManager(a.cfg.GameDir)
+		a.modInst = modloader.NewInstaller(a.cfg.GameDir)
+
+		dialog.ShowInformation("Saved", "Nastavení uloženo.", a.win)
+	})
+	saveBtn.Importance = widget.HighImportance
+
+	openDirBtn := widget.NewButton("Open Game Directory", func() {
+		openFolder(a.cfg.GameDir)
+	})
+
+	openLogsBtn := widget.NewButton("Open Logs", func() {
+		openFolder(filepath.Join(a.cfg.GameDir, "logs"))
+	})
+
+	form := widget.NewForm(
+		widget.NewFormItem("Game directory", gameDirEntry),
+		widget.NewFormItem("Java path", jvmEntry),
+		widget.NewFormItem("Extra JVM args", extraJVMEntry),
+	)
+
+	card := widget.NewCard("Settings", "Launcher configuration.", container.NewVBox(
+		form,
+		container.NewHBox(saveBtn, openDirBtn, openLogsBtn),
+	))
+
+	return container.NewVBox(card, layout.NewSpacer())
+}
+
+func (a *App) buildConsolePage() fyne.CanvasObject {
 	a.logOutput = widget.NewTextGrid()
-	a.logOutput.SetText("Console je připravená.\nLog Minecraftu najdeš v game directory/logs.\n")
+	a.logOutput.SetText("Console is ready.\nMinecraft log is in game directory/logs.\n")
 
 	scroll := container.NewScroll(a.logOutput)
-	scroll.SetMinSize(fyne.NewSize(900, 460))
+	scroll.SetMinSize(fyne.NewSize(760, 460))
 
 	clearBtn := widget.NewButton("Clear", func() {
 		a.logOutput.SetText("")
 	})
 
-	openLogsBtn := widget.NewButton("Open logs", func() {
+	openLogsBtn := widget.NewButton("Open Logs", func() {
 		openFolder(filepath.Join(a.cfg.GameDir, "logs"))
 	})
 
-	return container.NewPadded(container.NewBorder(nil, container.NewHBox(clearBtn, openLogsBtn), nil, nil, scroll))
+	card := widget.NewCard("Logs", "Minecraft output and launcher state.", container.NewBorder(nil, container.NewHBox(clearBtn, openLogsBtn), nil, nil, scroll))
+
+	return container.NewVBox(card, layout.NewSpacer())
 }
 
 func (a *App) loadVersions() {
-	a.setStatus("Načítám seznam verzí...")
+	a.setStatus("Loading versions...")
 
 	manifest, err := a.versionsMgr.FetchManifest()
 	if err != nil {
@@ -515,11 +675,11 @@ func (a *App) refreshVersionList() {
 		a.versionSelect.SetSelected(names[0])
 	}
 
-	a.setStatus(fmt.Sprintf("Načteno %d verzí.", len(names)))
+	a.setStatus(fmt.Sprintf("Loaded %d versions.", len(names)))
 }
 
 func (a *App) onMSLogin() {
-	a.setStatus("Přihlašuji přes Microsoft...")
+	a.setStatus("Logging in with Microsoft...")
 
 	if a.loginBtn != nil {
 		a.loginBtn.Disable()
@@ -534,7 +694,7 @@ func (a *App) onMSLogin() {
 
 		account, err := auth.LoginMicrosoftLoopback()
 		if err != nil {
-			a.setStatus("MS Login selhal: " + err.Error())
+			a.setStatus("MS Login failed: " + err.Error())
 			return
 		}
 
@@ -549,12 +709,12 @@ func (a *App) onMSLogin() {
 		a.cfg.OfflineUsername = account.Username
 
 		if err := configs.Save(a.cfg); err != nil {
-			a.setStatus("Nepodařilo se uložit účet: " + err.Error())
+			a.setStatus("Failed to save account: " + err.Error())
 			return
 		}
 
 		a.updateAccountLabel()
-		a.setStatus("Přihlášeno jako " + account.Username)
+		a.setStatus("Logged in as " + account.Username)
 	}()
 }
 
@@ -566,7 +726,7 @@ func (a *App) onLaunch() {
 	if a.cfg.OfflineMode || a.cfg.Account == nil {
 		playerName = strings.TrimSpace(a.cfg.OfflineUsername)
 		if playerName == "" {
-			dialog.ShowError(fmt.Errorf("zadej hráčské jméno nahoře"), a.win)
+			dialog.ShowError(fmt.Errorf("zadej hráčské jméno"), a.win)
 			return
 		}
 
@@ -587,7 +747,7 @@ func (a *App) onLaunch() {
 	versionID := extractVersionID(selected)
 
 	if a.manifest == nil {
-		a.setStatus("Seznam verzí není načten.")
+		a.setStatus("Version list is not loaded.")
 		return
 	}
 
@@ -610,7 +770,7 @@ func (a *App) onLaunch() {
 	a.launchBtn.Disable()
 	a.progressBar.Show()
 	a.progressBar.SetValue(0)
-	a.setStatus("Připravuji...")
+	a.setStatus("Preparing...")
 
 	go func() {
 		defer func() {
@@ -618,7 +778,7 @@ func (a *App) onLaunch() {
 			a.progressBar.Hide()
 		}()
 
-		a.setStatus("Načítám metadata verze...")
+		a.setStatus("Loading version metadata...")
 
 		meta, err := a.versionsMgr.FetchVersionMeta(entry)
 		if err != nil {
@@ -644,29 +804,31 @@ func (a *App) onLaunch() {
 			if p.Total > 0 {
 				pct := float64(p.Completed) / float64(p.Total)
 				a.progressBar.SetValue(pct)
-				a.setStatus(fmt.Sprintf("Stahuji... %d/%d", p.Completed, p.Total))
+				a.setStatus(fmt.Sprintf("Downloading... %d/%d", p.Completed, p.Total))
 			}
 		})
 
 		if err != nil {
-			a.setStatus("Spuštění selhalo: " + err.Error())
+			a.setStatus("Launch failed: " + err.Error())
 			return
 		}
 
 		logPath := filepath.Join(a.cfg.GameDir, "logs", "golauncher-latest.log")
 
-		a.setStatus("Minecraft běží.")
-		a.logOutput.SetText(fmt.Sprintf("[%s] Minecraft %s spuštěn\nPID: %d\nPlayer: %s\nLog: %s\n",
-			time.Now().Format("15:04:05"),
-			versionID,
-			result.Cmd.Process.Pid,
-			playerName,
-			logPath,
-		))
+		a.setStatus("Minecraft is running.")
+		if a.logOutput != nil {
+			a.logOutput.SetText(fmt.Sprintf("[%s] Minecraft %s launched\nPID: %d\nPlayer: %s\nLog: %s\n",
+				time.Now().Format("15:04:05"),
+				versionID,
+				result.Cmd.Process.Pid,
+				playerName,
+				logPath,
+			))
+		}
 
 		go func() {
 			_ = result.Cmd.Wait()
-			a.setStatus("Minecraft ukončen.")
+			a.setStatus("Minecraft closed.")
 		}()
 	}()
 }
@@ -692,7 +854,7 @@ func (a *App) updateAccountLabel() {
 		return
 	}
 
-	a.accountLabel.SetText("Offline mode")
+	a.accountLabel.SetText("Offline")
 }
 
 func openFolder(path string) {
