@@ -99,20 +99,23 @@ func Launch(cfg *Config, onProgress func(assets.Progress)) (*LaunchResult, error
 	}
 
 	status("Připravuji složky...")
+
 	if err := os.MkdirAll(cfg.GameDir, 0755); err != nil {
 		return nil, fmt.Errorf("nepodařilo se vytvořit game dir: %w", err)
 	}
+
 	if err := os.MkdirAll(filepath.Join(cfg.GameDir, "versions", meta.ID), 0755); err != nil {
 		return nil, fmt.Errorf("nepodařilo se vytvořit version dir: %w", err)
 	}
+
 	if err := os.MkdirAll(filepath.Join(cfg.GameDir, "libraries"), 0755); err != nil {
 		return nil, fmt.Errorf("nepodařilo se vytvořit libraries dir: %w", err)
 	}
+
 	if err := os.MkdirAll(filepath.Join(cfg.GameDir, "assets"), 0755); err != nil {
 		return nil, fmt.Errorf("nepodařilo se vytvořit assets dir: %w", err)
 	}
 
-	status("Připravuji soubory hry...")
 	downloader := assets.NewDownloader(cfg.GameDir)
 
 	status("Stahuji client JAR...")
@@ -146,6 +149,7 @@ func Launch(cfg *Config, onProgress func(assets.Progress)) (*LaunchResult, error
 	if err := os.RemoveAll(nativesDir); err != nil {
 		return nil, fmt.Errorf("nepodařilo se vyčistit natives: %w", err)
 	}
+
 	if err := os.MkdirAll(nativesDir, 0755); err != nil {
 		return nil, fmt.Errorf("nepodařilo se vytvořit natives: %w", err)
 	}
@@ -162,6 +166,7 @@ func Launch(cfg *Config, onProgress func(assets.Progress)) (*LaunchResult, error
 	}
 
 	status("Spouštím Minecraft...")
+
 	jvmArgs := buildJVMArgs(cfg, classpath, nativesDir, meta)
 	gameArgs := buildGameArgs(cfg, meta)
 
@@ -173,25 +178,16 @@ func Launch(cfg *Config, onProgress func(assets.Progress)) (*LaunchResult, error
 
 	cmd := exec.Command(javaPath, args...)
 	cmd.Dir = cfg.GameDir
-
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		return nil, fmt.Errorf("stdout pipe: %w", err)
-	}
-
-	stderr, err := cmd.StderrPipe()
-	if err != nil {
-		return nil, fmt.Errorf("stderr pipe: %w", err)
-	}
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	cmd.Stdin = os.Stdin
 
 	if err := cmd.Start(); err != nil {
 		return nil, fmt.Errorf("failed to start Minecraft: %w", err)
 	}
 
 	return &LaunchResult{
-		Cmd:    cmd,
-		Stdout: stdout,
-		Stderr: stderr,
+		Cmd: cmd,
 	}, nil
 }
 
@@ -265,6 +261,7 @@ func extractJarNatives(jarPath, destDir string) error {
 		}
 
 		normalized := strings.ReplaceAll(name, "\\", "/")
+
 		if strings.HasPrefix(normalized, "META-INF/") {
 			continue
 		}
@@ -300,9 +297,11 @@ func extractJarNatives(jarPath, destDir string) error {
 		if copyErr != nil {
 			return copyErr
 		}
+
 		if closeOutErr != nil {
 			return closeOutErr
 		}
+
 		if closeRcErr != nil {
 			return closeRcErr
 		}
@@ -318,6 +317,7 @@ func buildLibraryTasks(cfg *Config, meta *versions.VersionMeta) ([]assets.Downlo
 	if err := os.MkdirAll(libDir, 0755); err != nil {
 		return nil, "", err
 	}
+
 	if err := os.MkdirAll(nativesDir, 0755); err != nil {
 		return nil, "", err
 	}
@@ -403,7 +403,6 @@ func buildJVMArgs(cfg *Config, classpath, nativesDir string, meta *versions.Vers
 	args := []string{
 		fmt.Sprintf("-Xms%dm", cfg.AllocMin),
 		fmt.Sprintf("-Xmx%dm", cfg.AllocMax),
-
 		"-XX:+UnlockExperimentalVMOptions",
 		"-XX:+UseG1GC",
 		"-XX:G1NewSizePercent=20",
@@ -411,34 +410,27 @@ func buildJVMArgs(cfg *Config, classpath, nativesDir string, meta *versions.Vers
 		"-XX:MaxGCPauseMillis=50",
 		"-XX:G1HeapRegionSize=32M",
 		"-XX:+DisableExplicitGC",
-		"-XX:+AlwaysPreTouch",
 		"-XX:+PerfDisableSharedMem",
-
 		"-Dfile.encoding=UTF-8",
-
 		"-Djava.library.path=" + nativesDir,
+		"-Dorg.lwjgl.opengl.Display.allowSoftwareOpenGL=true",
 	}
 
 	args = append(args, cfg.JVMArgs...)
 
 	hasClasspathFromMeta := false
-	hasNativePathFromMeta := false
 
 	if meta.Arguments != nil {
 		for _, arg := range meta.Arguments.JVM {
 			s, ok := arg.(string)
 			if !ok {
-
 				continue
 			}
 
 			resolved := resolveVar(s, cfg, meta, nativesDir, classpath)
 
-			if resolved == "-cp" || resolved == "-classpath" || resolved == "${classpath}" {
+			if resolved == "-cp" || resolved == "-classpath" {
 				hasClasspathFromMeta = true
-			}
-			if strings.Contains(resolved, "java.library.path") {
-				hasNativePathFromMeta = true
 			}
 
 			if strings.Contains(resolved, "java.library.path") {
@@ -448,8 +440,6 @@ func buildJVMArgs(cfg *Config, classpath, nativesDir string, meta *versions.Vers
 			args = append(args, resolved)
 		}
 	}
-
-	_ = hasNativePathFromMeta
 
 	if !hasClasspathFromMeta {
 		args = append(args, "-cp", classpath)
@@ -469,8 +459,8 @@ func buildGameArgs(cfg *Config, meta *versions.VersionMeta) []string {
 		"${auth_access_token}": cfg.AccessToken,
 		"${user_type}":         "legacy",
 		"${version_type}":      string(meta.Type),
-		"${resolution_width}":  "854",
-		"${resolution_height}": "480",
+		"${resolution_width}":  "1280",
+		"${resolution_height}": "720",
 		"${clientid}":          "",
 		"${auth_xuid}":         "",
 		"${user_properties}":   "{}",
@@ -482,7 +472,6 @@ func buildGameArgs(cfg *Config, meta *versions.VersionMeta) []string {
 		for _, arg := range meta.Arguments.Game {
 			s, ok := arg.(string)
 			if !ok {
-
 				continue
 			}
 
@@ -500,9 +489,7 @@ func buildGameArgs(cfg *Config, meta *versions.VersionMeta) []string {
 		}
 	}
 
-	if cfg.Fullscreen {
-		args = append(args, "--fullscreen")
-	}
+	args = append(args, "--width", "1280", "--height", "720")
 
 	return args
 }

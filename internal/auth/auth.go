@@ -12,15 +12,14 @@ import (
 )
 
 const (
-	// Microsoft OAuth2 - použij vlastní Azure App ID
 	ClientID    = "00000000402b5328"
 	RedirectURI = "https://login.live.com/oauth20_desktop.srf"
 	AuthURL     = "https://login.live.com/oauth20_authorize.srf"
 	TokenURL    = "https://login.live.com/oauth20_token.srf"
 
-	XBLAuthURL  = "https://user.auth.xboxlive.com/user/authenticate"
-	XSTSAuthURL = "https://xsts.auth.xboxlive.com/xsts/authorize"
-	MCAuthURL   = "https://api.minecraftservices.com/authentication/login_with_xbox"
+	XBLAuthURL   = "https://user.auth.xboxlive.com/user/authenticate"
+	XSTSAuthURL  = "https://xsts.auth.xboxlive.com/xsts/authorize"
+	MCAuthURL    = "https://api.minecraftservices.com/authentication/login_with_xbox"
 	MCProfileURL = "https://api.minecraftservices.com/minecraft/profile"
 )
 
