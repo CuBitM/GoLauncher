@@ -2,7 +2,6 @@ package gui
 
 import (
 	"fmt"
-	"image/color"
 	"mclauncher/configs"
 	"mclauncher/internal/assets"
 	"mclauncher/internal/launcher"
@@ -17,7 +16,6 @@ import (
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
-	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/layout"
@@ -84,15 +82,8 @@ func (a *App) buildUI() fyne.CanvasObject {
 }
 
 func (a *App) buildHeader() fyne.CanvasObject {
-	bg := canvas.NewRectangle(color.NRGBA{R: 14, G: 15, B: 22, A: 255})
-	bg.SetMinSize(fyne.NewSize(1080, 76))
-
-	title := canvas.NewText("GoLauncher", color.NRGBA{R: 95, G: 220, B: 125, A: 255})
-	title.TextSize = 26
-	title.TextStyle = fyne.TextStyle{Bold: true}
-
-	subtitle := canvas.NewText("Clean Minecraft launcher", color.NRGBA{R: 145, G: 150, B: 165, A: 255})
-	subtitle.TextSize = 12
+	title := widget.NewLabelWithStyle("GoLauncher", fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
+	subtitle := widget.NewLabel("Clean Minecraft launcher")
 
 	a.accountLabel = widget.NewLabel("")
 	a.updateAccountLabel()
@@ -122,7 +113,7 @@ func (a *App) buildHeader() fyne.CanvasObject {
 
 	left := container.NewVBox(title, subtitle)
 
-	accountBox := container.NewHBox(
+	right := container.NewHBox(
 		usernameEntry,
 		offlineBtn,
 		loginBtn,
@@ -130,12 +121,7 @@ func (a *App) buildHeader() fyne.CanvasObject {
 		a.accountLabel,
 	)
 
-	headerContent := container.NewBorder(nil, nil, left, accountBox)
-
-	return container.NewStack(
-		bg,
-		container.NewPadded(headerContent),
-	)
+	return widget.NewCard("", "", container.NewBorder(nil, nil, left, right))
 }
 
 func (a *App) buildLaunchTab() fyne.CanvasObject {
@@ -167,12 +153,6 @@ func (a *App) buildLaunchTab() fyne.CanvasObject {
 		a.ramSlider,
 	))
 
-	fullscreenCheck := widget.NewCheck("Minecraft fullscreen", func(v bool) {
-		a.cfg.Fullscreen = v
-		configs.Save(a.cfg)
-	})
-	fullscreenCheck.SetChecked(a.cfg.Fullscreen)
-
 	snapshotCheck := widget.NewCheck("Show snapshots", func(v bool) {
 		a.cfg.ShowSnapshots = v
 		a.refreshVersionList()
@@ -188,7 +168,6 @@ func (a *App) buildLaunchTab() fyne.CanvasObject {
 	oldCheck.SetChecked(a.cfg.ShowOld)
 
 	optionsCard := widget.NewCard("Options", "", container.NewVBox(
-		fullscreenCheck,
 		snapshotCheck,
 		oldCheck,
 	))
@@ -549,7 +528,7 @@ func (a *App) onLaunch() {
 			JVMArgs:     a.cfg.ExtraJVMArgs,
 			AllocMin:    512,
 			AllocMax:    a.cfg.AllocMax,
-			Fullscreen:  a.cfg.Fullscreen,
+			Fullscreen:  false,
 		}
 
 		result, err := launcher.Launch(cfg, func(p assets.Progress) {

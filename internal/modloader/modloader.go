@@ -35,7 +35,7 @@ type FabricVersion struct {
 }
 
 type ForgeVersion struct {
-	Version string
+	Version   string
 	MCVersion string
 }
 
